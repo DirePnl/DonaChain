@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract DonationPlatform is Ownable, ReentrancyGuard {
     struct Donation {
@@ -14,6 +15,7 @@ contract DonationPlatform is Ownable, ReentrancyGuard {
         string message;
     }
 
+    IERC20 public donaToken;
     uint256 public feePercentage = 2; // 2% fee
     uint256 public constant MAX_FEE = 5; // Maximum 5% fee
     mapping(uint256 => Donation) public donations;
@@ -31,7 +33,8 @@ contract DonationPlatform is Ownable, ReentrancyGuard {
 
     event FeeUpdated(uint256 newFee);
 
-    constructor() {
+    constructor(address _donaToken) {
+        donaToken = IERC20(_donaToken);
         donationCount = 0;
     }
 
@@ -41,20 +44,21 @@ contract DonationPlatform is Ownable, ReentrancyGuard {
         emit FeeUpdated(_feePercentage);
     }
 
-    function donate(address _recipient, string memory _message) external payable nonReentrant {
-        require(msg.value > 0, "Donation must be greater than 0");
+    function donate(address _recipient, uint256 _amount, string memory _message) external nonReentrant {
+        require(_amount > 0, "Donation must be greater than 0");
         require(_recipient != address(0), "Invalid recipient address");
 
-        uint256 fee = (msg.value * feePercentage) / 100;
-        uint256 donationAmount = msg.value - fee;
+        uint256 fee = (_amount * feePercentage) / 100;
+        uint256 donationAmount = _amount - fee;
+
+        // Transfer tokens from donor to this contract
+        require(donaToken.transferFrom(msg.sender, address(this), _amount), "Token transfer failed");
 
         // Transfer donation amount to recipient
-        (bool recipientSuccess, ) = _recipient.call{value: donationAmount}("");
-        require(recipientSuccess, "Failed to send donation to recipient");
+        require(donaToken.transfer(_recipient, donationAmount), "Failed to send donation to recipient");
 
         // Transfer fee to contract owner
-        (bool feeSuccess, ) = owner().call{value: fee}("");
-        require(feeSuccess, "Failed to send fee to owner");
+        require(donaToken.transfer(owner(), fee), "Failed to send fee to owner");
 
         // Record donation
         donations[donationCount] = Donation({

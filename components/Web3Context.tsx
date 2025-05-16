@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { ethers } from 'ethers';
 import Web3Modal from 'web3modal';
 import DonationPlatform from '../artifacts/contracts/DonationPlatform.sol/DonationPlatform.json';
+import DonaToken from '../artifacts/contracts/DonaToken.sol/DonaToken.json';
 
 declare global {
   interface Window {
@@ -12,6 +13,7 @@ declare global {
 interface Web3ContextType {
   account: string | null;
   contract: ethers.Contract | null;
+  tokenContract: ethers.Contract | null;
   provider: ethers.providers.Web3Provider | null;
   connectWallet: () => Promise<void>;
   loading: boolean;
@@ -20,6 +22,7 @@ interface Web3ContextType {
 const Web3Context = createContext<Web3ContextType>({
   account: null,
   contract: null,
+  tokenContract: null,
   provider: null,
   connectWallet: async () => {},
   loading: false,
@@ -34,6 +37,7 @@ interface Web3ProviderProps {
 export const Web3Provider: React.FC<Web3ProviderProps> = ({ children }) => {
   const [account, setAccount] = useState<string | null>(null);
   const [contract, setContract] = useState<ethers.Contract | null>(null);
+  const [tokenContract, setTokenContract] = useState<ethers.Contract | null>(null);
   const [provider, setProvider] = useState<ethers.providers.Web3Provider | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -50,17 +54,26 @@ export const Web3Provider: React.FC<Web3ProviderProps> = ({ children }) => {
       const signer = provider.getSigner();
       const account = await signer.getAddress();
 
-      // Replace with your deployed contract address
-      const contractAddress = "YOUR_CONTRACT_ADDRESS";
-      const contract = new ethers.Contract(
-        contractAddress,
+      // Replace with your deployed contract addresses
+      const platformAddress = "YOUR_PLATFORM_CONTRACT_ADDRESS";
+      const tokenAddress = "YOUR_TOKEN_CONTRACT_ADDRESS";
+
+      const platformContract = new ethers.Contract(
+        platformAddress,
         DonationPlatform.abi,
+        signer
+      );
+
+      const donaTokenContract = new ethers.Contract(
+        tokenAddress,
+        DonaToken.abi,
         signer
       );
 
       setProvider(provider);
       setAccount(account);
-      setContract(contract);
+      setContract(platformContract);
+      setTokenContract(donaTokenContract);
     } catch (error) {
       console.error("Error connecting wallet:", error);
     } finally {
@@ -81,6 +94,7 @@ export const Web3Provider: React.FC<Web3ProviderProps> = ({ children }) => {
       value={{
         account,
         contract,
+        tokenContract,
         provider,
         connectWallet,
         loading,

@@ -14,4 +14,7 @@ module.exports = {
   paths: {
     artifacts: './artifacts',
   },
+  ethers: {
+    version: 5
+  }
 };

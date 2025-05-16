@@ -10,6 +10,7 @@ import {
   Text,
   Spinner,
   VStack,
+  Badge,
 } from '@chakra-ui/react';
 import { ethers } from 'ethers';
 import { useWeb3 } from './Web3Context';
@@ -92,8 +93,8 @@ const DonationHistory: React.FC = () => {
             <Th>Date</Th>
             <Th>Donor</Th>
             <Th>Recipient</Th>
-            <Th>Amount (ETH)</Th>
-            <Th>Fee (ETH)</Th>
+            <Th>Amount (DONA)</Th>
+            <Th>Fee (DONA)</Th>
             <Th>Message</Th>
           </Tr>
         </Thead>
@@ -101,8 +102,16 @@ const DonationHistory: React.FC = () => {
           {donations.map((donation: Donation, index: number) => (
             <Tr key={index}>
               <Td>{new Date(donation.timestamp * 1000).toLocaleDateString()}</Td>
-              <Td>{`${donation.donor.slice(0, 6)}...${donation.donor.slice(-4)}`}</Td>
-              <Td>{`${donation.recipient.slice(0, 6)}...${donation.recipient.slice(-4)}`}</Td>
+              <Td>
+                <Badge colorScheme="blue">
+                  {`${donation.donor.slice(0, 6)}...${donation.donor.slice(-4)}`}
+                </Badge>
+              </Td>
+              <Td>
+                <Badge colorScheme="green">
+                  {`${donation.recipient.slice(0, 6)}...${donation.recipient.slice(-4)}`}
+                </Badge>
+              </Td>
               <Td>{donation.amount}</Td>
               <Td>{donation.fee}</Td>
               <Td>{donation.message}</Td>

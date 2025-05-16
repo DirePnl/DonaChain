@@ -9,22 +9,53 @@ import {
   Text,
   useToast,
   Textarea,
+  HStack,
 } from '@chakra-ui/react';
 import { ethers } from 'ethers';
 import { useWeb3 } from './Web3Context';
 import type { InputChangeEvent, FormSubmitEvent } from '../types/global';
 
 const DonationForm: React.FC = () => {
-  const { contract, account } = useWeb3();
+  const { contract, account, tokenContract } = useWeb3();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [approving, setApproving] = useState(false);
   const toast = useToast();
+
+  const handleApprove = async () => {
+    if (!tokenContract || !contract || !amount) return;
+
+    try {
+      setApproving(true);
+      const amountInWei = ethers.utils.parseEther(amount);
+      const tx = await tokenContract.approve(contract.address, amountInWei);
+      await tx.wait();
+
+      toast({
+        title: 'Success',
+        description: 'Token approval successful!',
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to approve tokens',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setApproving(false);
+    }
+  };
 
   const handleDonate = async (e: FormSubmitEvent) => {
     e.preventDefault();
-    if (!contract || !account) {
+    if (!contract || !account || !tokenContract) {
       toast({
         title: 'Error',
         description: 'Please connect your wallet first',
@@ -37,13 +68,22 @@ const DonationForm: React.FC = () => {
 
     try {
       setLoading(true);
-      const tx = await contract.donate(
-        recipient,
-        message,
-        {
-          value: ethers.utils.parseEther(amount),
-        }
-      );
+      const amountInWei = ethers.utils.parseEther(amount);
+      
+      // Check allowance
+      const allowance = await tokenContract.allowance(account, contract.address);
+      if (allowance.lt(amountInWei)) {
+        toast({
+          title: 'Error',
+          description: 'Please approve tokens first',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        });
+        return;
+      }
+
+      const tx = await contract.donate(recipient, amountInWei, message);
       await tx.wait();
 
       toast({
@@ -89,7 +129,7 @@ const DonationForm: React.FC = () => {
           </FormControl>
 
           <FormControl isRequired>
-            <FormLabel>Amount (ETH)</FormLabel>
+            <FormLabel>Amount (DONA)</FormLabel>
             <Input
               type="number"
               step="0.01"
@@ -108,15 +148,26 @@ const DonationForm: React.FC = () => {
             />
           </FormControl>
 
-          <Button
-            type="submit"
-            colorScheme="blue"
-            width="full"
-            isLoading={loading}
-            loadingText="Donating..."
-          >
-            Donate
-          </Button>
+          <HStack width="full" spacing={4}>
+            <Button
+              colorScheme="green"
+              width="full"
+              onClick={handleApprove}
+              isLoading={approving}
+              loadingText="Approving..."
+            >
+              Approve DONA
+            </Button>
+            <Button
+              type="submit"
+              colorScheme="blue"
+              width="full"
+              isLoading={loading}
+              loadingText="Donating..."
+            >
+              Donate
+            </Button>
+          </HStack>
         </VStack>
       </form>
     </Box>
