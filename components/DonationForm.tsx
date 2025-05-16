@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -10,6 +10,8 @@ import {
   useToast,
   Textarea,
   HStack,
+  Select,
+  Spinner,
 } from '@chakra-ui/react';
 import { ethers } from 'ethers';
 import { useWeb3 } from './Web3Context';
@@ -22,7 +24,26 @@ const DonationForm: React.FC = () => {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [currency, setCurrency] = useState<'ETH' | 'DONA'>('ETH');
+  const [estimatedDona, setEstimatedDona] = useState<string>('0');
   const toast = useToast();
+
+  useEffect(() => {
+    const updateEstimatedDona = async () => {
+      if (currency === 'ETH' && amount && contract) {
+        try {
+          const ethAmount = ethers.utils.parseEther(amount);
+          const estimated = await contract.getEthToDonaRate(ethAmount);
+          setEstimatedDona(ethers.utils.formatEther(estimated));
+        } catch (error) {
+          console.error('Error estimating DONA:', error);
+          setEstimatedDona('0');
+        }
+      }
+    };
+
+    updateEstimatedDona();
+  }, [amount, currency, contract]);
 
   const handleApprove = async () => {
     if (!tokenContract || !contract || !amount) return;
@@ -55,7 +76,7 @@ const DonationForm: React.FC = () => {
 
   const handleDonate = async (e: FormSubmitEvent) => {
     e.preventDefault();
-    if (!contract || !account || !tokenContract) {
+    if (!contract || !account) {
       toast({
         title: 'Error',
         description: 'Please connect your wallet first',
@@ -70,21 +91,33 @@ const DonationForm: React.FC = () => {
       setLoading(true);
       const amountInWei = ethers.utils.parseEther(amount);
       
-      // Check allowance
-      const allowance = await tokenContract.allowance(account, contract.address);
-      if (allowance.lt(amountInWei)) {
-        toast({
-          title: 'Error',
-          description: 'Please approve tokens first',
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-        });
-        return;
-      }
+      if (currency === 'DONA') {
+        if (!tokenContract) {
+          throw new Error('Token contract not initialized');
+        }
+        
+        // Check allowance for DONA donations
+        const allowance = await tokenContract.allowance(account, contract.address);
+        if (allowance.lt(amountInWei)) {
+          toast({
+            title: 'Error',
+            description: 'Please approve tokens first',
+            status: 'error',
+            duration: 5000,
+            isClosable: true,
+          });
+          return;
+        }
 
-      const tx = await contract.donate(recipient, amountInWei, message);
-      await tx.wait();
+        const tx = await contract.donate(recipient, amountInWei, message);
+        await tx.wait();
+      } else {
+        // ETH donation
+        const tx = await contract.donateWithEth(recipient, message, {
+          value: amountInWei
+        });
+        await tx.wait();
+      }
 
       toast({
         title: 'Success',
@@ -129,14 +162,30 @@ const DonationForm: React.FC = () => {
           </FormControl>
 
           <FormControl isRequired>
-            <FormLabel>Amount (DONA)</FormLabel>
+            <FormLabel>Currency</FormLabel>
+            <Select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value as 'ETH' | 'DONA')}
+            >
+              <option value="ETH">ETH</option>
+              <option value="DONA">DONA</option>
+            </Select>
+          </FormControl>
+
+          <FormControl isRequired>
+            <FormLabel>Amount ({currency})</FormLabel>
             <Input
               type="number"
-              step="0.01"
+              step="0.000000000000000001"
               value={amount}
               onChange={(e) => handleInputChange(e, setAmount)}
               placeholder="0.1"
             />
+            {currency === 'ETH' && amount && (
+              <Text fontSize="sm" color="gray.600" mt={1}>
+                Estimated DONA: {estimatedDona}
+              </Text>
+            )}
           </FormControl>
 
           <FormControl>
@@ -149,15 +198,17 @@ const DonationForm: React.FC = () => {
           </FormControl>
 
           <HStack width="full" spacing={4}>
-            <Button
-              colorScheme="green"
-              width="full"
-              onClick={handleApprove}
-              isLoading={approving}
-              loadingText="Approving..."
-            >
-              Approve DONA
-            </Button>
+            {currency === 'DONA' && (
+              <Button
+                colorScheme="green"
+                width="full"
+                onClick={handleApprove}
+                isLoading={approving}
+                loadingText="Approving..."
+              >
+                Approve DONA
+              </Button>
+            )}
             <Button
               type="submit"
               colorScheme="blue"
